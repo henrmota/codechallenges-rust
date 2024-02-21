@@ -18,29 +18,56 @@ struct Args {
     filename: Option<String>,
 }
 
-struct WC {
+struct FileMetrics {
     words: i16,
     bytes: i16,
     characters: i16,
     lines: i16,
 }
 
-impl WC {
-    pub fn new() -> WC {
-        WC {
+impl FileMetrics {
+    pub fn new<T: Read>(file: T) -> FileMetrics {
+        let mut metrics = FileMetrics {
             words: 0,
             bytes: 0,
             characters: 0,
             lines: 0,
+        };
+
+        metrics.analyze(file);
+
+        return metrics;
+    }
+
+    pub fn stringFromArgs(&self, cbytes: bool, lines: bool, mchars: bool, words: bool) -> String {
+        let no_flags = !cbytes && !lines && !mchars && !words;
+        let mut output = String::new();
+
+        if cbytes || no_flags {
+            output = format!("{} {}", output, self.bytes);
         }
+
+        if lines || no_flags {
+            output = format!("{} {}", output, self.lines);
+        }
+
+        if words || no_flags {
+            output = format!("{} {}", output, self.words);
+        }
+
+        if mchars {
+            output = format!("{} {}", output, self.characters)
+        }
+
+        return output;
     }
 
     fn analyze<T: Read>(&mut self, file: T) {
         let mut in_word = false;
 
-        for byte in file.bytes() {
-            in_word = match byte {
-                Ok(value) => self.process_byte(value, in_word),
+        for byte_result in file.bytes() {
+            in_word = match byte_result {
+                Ok(byte) => self.process_byte(byte, in_word),
                 _ => in_word,
             };
         }
@@ -76,36 +103,14 @@ fn main() {
     let args = Args::parse();
     let filename: Option<String> = args.filename;
 
-    //println!("Hello {:?}!", args);
-
     let file: Box<dyn Read> = match filename.as_ref() {
         Some(value) => Box::new(std::fs::File::open(value).expect("Cannot open file")),
         None => Box::new(std::io::stdin()),
     };
 
-    let mut wc = WC::new();
+    let wc = FileMetrics::new(file);
 
-    wc.analyze(file);
-
-    let mut output = String::new();
-
-    let no_flags = !args.cbytes && !args.lines && !args.mchars && !args.words;
-
-    if args.cbytes || no_flags {
-        output = format!("{} {}", output, wc.bytes);
-    }
-
-    if args.lines || no_flags {
-        output = format!("{} {}", output, wc.lines);
-    }
-
-    if args.words || no_flags {
-        output = format!("{} {}", output, wc.words);
-    }
-
-    if args.mchars {
-        output = format!("{} {}", output, wc.characters)
-    }
+    let mut output = wc.stringFromArgs(args.cbytes, args.lines, args.mchars, args.words);
 
     match filename {
         Some(filename) => output = format!("{} {}", output, filename),
